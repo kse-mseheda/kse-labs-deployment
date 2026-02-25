@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Bootstrap - manages ArgoCD projects and ApplicationSets
   sourceRepos:
-    - https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
+    - https://github.com/kse-mseheda/kse-labs-deployment.git
   destinations:
     - namespace: argocd
       server: https://kubernetes.default.svc

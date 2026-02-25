@@ -21,7 +21,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: simple-go-service-a
-          image: ghcr.io/kse-bd8338bbe006/simple-go-service-a:v0.0.16
+          image: ghcr.io/kse-mseheda/simple-go-service-a:v0.0.16
           ports:
             - name: http
               containerPort: 8080
