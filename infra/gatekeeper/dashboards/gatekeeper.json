@@ -1,0 +1,226 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Admission Webhook",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Validation requests (last 5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 2,
+      "targets": [{ "expr": "sum(increase(gatekeeper_validation_request_count_total[5m]))", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } }
+    },
+    {
+      "type": "stat",
+      "title": "Denies (last 5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 3,
+      "targets": [{ "expr": "sum(increase(gatekeeper_validation_request_count_total{admission_status=\"deny\"}[5m]))", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ]}
+        }
+      },
+      "options": { "colorMode": "background" }
+    },
+    {
+      "type": "stat",
+      "title": "Mutation requests (last 5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 4,
+      "targets": [{ "expr": "sum(increase(gatekeeper_mutation_request_count_total[5m]))", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } }
+    },
+    {
+      "type": "stat",
+      "title": "Mutator conflicts",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 5,
+      "targets": [{ "expr": "max(gatekeeper_mutator_conflicting_count)", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ]}
+        }
+      },
+      "options": { "colorMode": "background" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Validation request rate (by status)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "id": 6,
+      "targets": [{
+        "expr": "sum by (admission_status) (rate(gatekeeper_validation_request_count_total[5m]))",
+        "legendFormat": "{{admission_status}}", "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Mutation request rate (by status)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "id": 7,
+      "targets": [{
+        "expr": "sum by (mutation_status) (rate(gatekeeper_mutation_request_count_total[5m]))",
+        "legendFormat": "{{mutation_status}}", "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Validation webhook latency (percentiles)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "id": 8,
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(gatekeeper_validation_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(gatekeeper_validation_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(gatekeeper_validation_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Mutation webhook latency (percentiles)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "id": 9,
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(gatekeeper_mutation_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(gatekeeper_mutation_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(gatekeeper_mutation_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "row",
+      "title": "Audit Controller",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "id": 10,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Time since last audit",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 22 },
+      "id": 11,
+      "targets": [{ "expr": "time() - max(gatekeeper_audit_last_run_end_time)", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 300 },
+            { "color": "red", "value": 900 }
+          ]}
+        }
+      },
+      "options": { "colorMode": "background" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Audit run duration",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 22 },
+      "id": 12,
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(gatekeeper_audit_duration_seconds_bucket[10m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(gatekeeper_audit_duration_seconds_bucket[10m])))", "legendFormat": "p95", "refId": "B" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Audit runs",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 22 },
+      "id": 13,
+      "targets": [{
+        "expr": "rate(gatekeeper_audit_duration_seconds_count[10m])",
+        "legendFormat": "runs/sec", "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "type": "row",
+      "title": "Watch Manager",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "id": 14,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Watched vs intended GVKs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "id": 15,
+      "targets": [
+        { "expr": "max(gatekeeper_watch_manager_intended_watch_gvk)", "legendFormat": "intended", "refId": "A" },
+        { "expr": "max(gatekeeper_watch_manager_watched_gvk)", "legendFormat": "watched", "refId": "B" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Mutation system iterations (p99)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "id": 16,
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum by (le) (rate(gatekeeper_mutation_system_iterations_bucket[5m])))",
+        "legendFormat": "p99 iterations", "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["gatekeeper", "opa", "policy"],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "OPA Gatekeeper",
+  "uid": "gatekeeper-adapted",
+  "version": 1,
+  "weekStart": ""
+}

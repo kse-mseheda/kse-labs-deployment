@@ -1,0 +1,21 @@
+{{- /*
+Custom addition (not from upstream chart).
+Provisions the OPA Gatekeeper dashboard into kube-prometheus-stack's Grafana.
+The sidecar in Grafana watches ConfigMaps cluster-wide labeled
+`grafana_dashboard: "1"` and imports their data entries as dashboards.
+
+Dashboard content lives in ../dashboards/gatekeeper.json and is loaded via
+Helm's Files.Get so the JSON can be edited without touching this template.
+Adapted from grafana.com dashboard 15763 to use only metrics our Gatekeeper
+v3.21 build actually exports (no constraint/violation metrics, no scorecard).
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-gatekeeper
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  gatekeeper.json: |
+{{ .Files.Get "dashboards/gatekeeper.json" | indent 4 }}

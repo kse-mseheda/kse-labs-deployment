@@ -5,6 +5,8 @@ metadata:
   namespace: applications
   labels:
     app.kubernetes.io/name: my-app
+    # Required by Gatekeeper constraint deployments-must-have-owner-label.
+    owner: platform-team
 spec:
   replicas: 1
   selector:
@@ -17,6 +19,11 @@ spec:
     spec:
       imagePullSecrets:
         - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: my-app
           image: ghcr.io/kse-mseheda/my-app:ed5fbb1a63b3fa01fbd7f29f920a8627de27ad3d
@@ -27,6 +34,14 @@ spec:
           env:
             - name: PORT
               value: "3000"
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 100m
@@ -46,3 +61,8 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

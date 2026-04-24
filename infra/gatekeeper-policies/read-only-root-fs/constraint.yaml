@@ -1,0 +1,40 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPReadOnlyRootFilesystem
+metadata:
+  name: pods-must-use-read-only-root-fs
+  annotations:
+    # Apply after the ConstraintTemplate in the same sync so Gatekeeper
+    # has a chance to generate the CRD this Constraint depends on.
+    argocd.argoproj.io/sync-wave: "1"
+    # This Constraint's CRD (K8sPSPReadOnlyRootFilesystem) is generated
+    # by Gatekeeper from the ConstraintTemplate in the previous wave.
+    # On first sync the CRD does not yet exist, so ArgoCD's client-side
+    # dry-run errors. This tells ArgoCD to skip that dry-run for this
+    # resource only.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # dryrun: the audit controller reports violations but admission is not
+  # blocked. Flip to `deny` once existing workloads have been remediated
+  # or exempted. Most lab infra pods do not set readOnlyRootFilesystem
+  # and would be rejected under `deny`.
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-flannel
+      - kube-node-lease
+      - gatekeeper
+      - gatekeeper-policy-manager
+      - argocd
+      - monitoring
+      - ingress-nginx
+      - external-secrets
+      - nfs-provisioner
+      - vault
+  parameters:
+    # Placeholder -- swap in actual exempt image prefixes as needed.
+    exemptImages: []

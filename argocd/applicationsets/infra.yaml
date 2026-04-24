@@ -21,6 +21,12 @@ spec:
         repoURL: https://github.com/kse-mseheda/kse-labs-deployment.git
         targetRevision: main
         path: '{{path}}'
+        directory:
+          # Recurse through subdirectories so apps can organize their
+          # YAMLs into per-topic folders (e.g. gatekeeper-policies
+          # groups related files into read-only-root-fs/, etc.).
+          # Helm chart apps ignore this field.
+          recurse: true
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{path.basename}}'

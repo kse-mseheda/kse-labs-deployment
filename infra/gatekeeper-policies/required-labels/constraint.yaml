@@ -1,0 +1,28 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: deployments-must-have-owner-label
+  annotations:
+    # Apply after the ConstraintTemplate so Gatekeeper has a chance to
+    # generate the CRD this Constraint depends on.
+    argocd.argoproj.io/sync-wave: "1"
+    # First-sync CRD race -- see read-only-root-fs/constraint.yaml for
+    # the full explanation.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # `deny` -- the admission webhook rejects any Deployment in the
+  # `applications` namespace that is missing the `owner` label.
+  # This policy is designed to block the svc-my-app ArgoCD sync so
+  # the classroom can observe the failure, then fix it by adding the
+  # label to the Deployment manifest.
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces:
+      - applications
+  parameters:
+    message: "All Deployments in `applications` must carry an `owner` label (team name)."
+    labels:
+      - key: owner

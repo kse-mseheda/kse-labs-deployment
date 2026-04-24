@@ -1,0 +1,20 @@
+{{- /*
+Custom addition (not from upstream chart).
+Exposes Gatekeeper's /metrics endpoint (port 8888) to the
+kube-prometheus-stack Prometheus. The `release` label matches
+the Prometheus CR's serviceMonitorSelector / podMonitorSelector.
+*/ -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: gatekeeper
+  namespace: '{{ .Release.Namespace }}'
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      gatekeeper.sh/system: "yes"
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
