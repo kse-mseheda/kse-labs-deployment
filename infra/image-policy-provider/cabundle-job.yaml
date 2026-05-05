@@ -1,0 +1,248 @@
+# Creates (or refreshes) the Gatekeeper Provider CRD with the CA cert
+# from the cert-manager-issued Secret already mounted at the Provider
+# Service.
+#
+# Why a Job and not a static manifest:
+#   Gatekeeper's validating webhook rejects a Provider with an empty
+#   `spec.caBundle` when `spec.url` is HTTPS, so we cannot ship a
+#   placeholder and patch later. Vault's intermediate CA also rotates
+#   whenever someone re-bootstraps the PKI, so a static base64 blob
+#   would drift. Both problems disappear if the resource is rendered at
+#   sync time from the live Secret.
+#
+# Sync-waves:
+#   ServiceAccount / Roles / ConfigMap -- wave 30 (after cert + deploy)
+#   Job                                -- wave 35 (Sync hook, idempotent)
+#
+# Idempotent: re-runs are no-ops when the Provider already carries the
+# correct caBundle.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+rules:
+  # Read cert-manager's issued Secret for our own CA bundle.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["image-policy-provider-tls"]
+    verbs: ["get"]
+  # Manage the gatekeeper-ca Secret we mirror into this namespace.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["gatekeeper-ca"]
+    verbs: ["get", "create", "update", "patch"]
+  # `create` cannot be filtered by resourceNames; allow it broadly
+  # within this namespace only.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: provider-cabundle-patcher
+subjects:
+  - kind: ServiceAccount
+    name: provider-cabundle-patcher
+    namespace: image-policy-provider
+---
+# Cross-namespace read of Gatekeeper's webhook server cert. Same
+# Secret holds the cert AND its CA chain; we only need the CA so our
+# provider can verify Gatekeeper's client certificate during mTLS.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: read-gatekeeper-webhook-cert
+  namespace: gatekeeper
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["gatekeeper-webhook-server-cert"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: provider-cabundle-patcher-reads-gk
+  namespace: gatekeeper
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: read-gatekeeper-webhook-cert
+subjects:
+  - kind: ServiceAccount
+    name: provider-cabundle-patcher
+    namespace: image-policy-provider
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: provider-cabundle-patcher
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+rules:
+  # `create` and `list` cannot be restricted by `resourceNames` -- the
+  # API server evaluates that filter only after the request payload is
+  # decoded, so RBAC has to allow these verbs cluster-wide on the
+  # resource. We narrow get/update/patch to the single name.
+  - apiGroups: ["externaldata.gatekeeper.sh"]
+    resources: ["providers"]
+    verbs: ["create", "list"]
+  - apiGroups: ["externaldata.gatekeeper.sh"]
+    resources: ["providers"]
+    resourceNames: ["image-policy-provider"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: provider-cabundle-patcher
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: provider-cabundle-patcher
+subjects:
+  - kind: ServiceAccount
+    name: provider-cabundle-patcher
+    namespace: image-policy-provider
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provider-cabundle-patcher-script
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+data:
+  patch.sh: |
+    #!/bin/sh
+    set -eu
+
+    # ----- 1. Wait for cert-manager to populate our own CA bundle -----
+    # The cert-manager Certificate creates the Secret immediately, but
+    # ca.crt only appears once Vault returns the signed leaf, so a
+    # short retry loop is enough on a cold start.
+    for i in $(seq 1 60); do
+      CA_B64=$(kubectl get secret -n image-policy-provider \
+        image-policy-provider-tls \
+        -o jsonpath='{.data.ca\.crt}' 2>/dev/null || true)
+      if [ -n "$CA_B64" ]; then
+        break
+      fi
+      echo "waiting for cert-manager to populate ca.crt ($i/60)..."
+      sleep 5
+    done
+    if [ -z "$CA_B64" ]; then
+      echo "ca.crt never appeared in image-policy-provider-tls Secret" >&2
+      exit 1
+    fi
+
+    # ----- 2. Render the Gatekeeper Provider CRD with that CA -----
+    cat <<EOF | kubectl apply -f -
+    apiVersion: externaldata.gatekeeper.sh/v1beta1
+    kind: Provider
+    metadata:
+      name: image-policy-provider
+    spec:
+      url: https://image-policy-provider.image-policy-provider.svc:443/validate
+      timeout: 10
+      caBundle: ${CA_B64}
+    EOF
+
+    # ----- 3. Mirror Gatekeeper's webhook CA into our namespace -----
+    # This is what enables mTLS at the provider: the entrypoint reads
+    # GATEKEEPER_CA_CERT_FILE and, if present, configures uvicorn with
+    # ssl_cert_reqs=REQUIRED + ssl_ca_certs=<this CA>. The Secret in
+    # the gatekeeper namespace contains tls.crt/tls.key/ca.crt; we
+    # only need ca.crt -- chain that signed Gatekeeper's webhook cert
+    # is also what signs its outbound client cert.
+    GK_CA_B64=$(kubectl get secret -n gatekeeper \
+      gatekeeper-webhook-server-cert \
+      -o jsonpath='{.data.ca\.crt}' 2>/dev/null || true)
+    if [ -z "$GK_CA_B64" ]; then
+      # Older Gatekeeper builds put the CA only inside tls.crt
+      # (self-signed); fall back to that.
+      GK_CA_B64=$(kubectl get secret -n gatekeeper \
+        gatekeeper-webhook-server-cert \
+        -o jsonpath='{.data.tls\.crt}' 2>/dev/null || true)
+    fi
+    if [ -z "$GK_CA_B64" ]; then
+      echo "could not read Gatekeeper's webhook CA (skipping mTLS bootstrap)"
+    else
+      cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: gatekeeper-ca
+      namespace: image-policy-provider
+    type: Opaque
+    data:
+      ca.crt: ${GK_CA_B64}
+    EOF
+      echo "gatekeeper-ca Secret refreshed."
+    fi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: provider-cabundle-patcher
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "35"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      serviceAccountName: provider-cabundle-patcher
+      restartPolicy: OnFailure
+      containers:
+        - name: patcher
+          # alpine/k8s ships kubectl + a real shell on Alpine. We need
+          # /bin/sh because the script does a wait loop and conditional
+          # logic. rancher/kubectl is distroless (kubectl binary only),
+          # bitnami/kubectl moved to a paid catalog on 2025-08-28.
+          image: alpine/k8s:1.32.13
+          command: ["/bin/sh", "/scripts/patch.sh"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: script
+          configMap:
+            name: provider-cabundle-patcher-script
+            defaultMode: 0555

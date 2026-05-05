@@ -1,0 +1,19 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sUniqueIngressHost
+metadata:
+  name: unique-ingress-host
+  annotations:
+    # Apply after the ConstraintTemplate so Gatekeeper has a chance to
+    # generate the CRD this Constraint depends on.
+    argocd.argoproj.io/sync-wave: "1"
+    # First-sync CRD race -- see read-only-root-fs/constraint.yaml.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # `dryrun` -- the audit controller reports duplicate hostnames in
+  # `.status.violations`, but admission is not blocked. Flip to `deny`
+  # once you are confident no legitimate workload claims the same host.
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: ["networking.k8s.io"]
+        kinds: ["Ingress"]

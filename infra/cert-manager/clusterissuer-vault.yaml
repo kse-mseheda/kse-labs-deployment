@@ -1,0 +1,37 @@
+# ClusterIssuer that signs leaf certs by calling Vault's pki_int engine
+# (configured by infra/vault-pki/).
+#
+# Authenticates to Vault with the in-cluster Kubernetes auth method:
+# cert-manager's ServiceAccount mints a JWT, Vault verifies it against
+# the API server's TokenReview endpoint, and grants the `pki-issuer`
+# policy to the bound role.
+#
+# This depends on cluster nodes having sane wall-clock time (Vault
+# rejects JWTs whose `nbf` claim is in the future). The lab ensures
+# that with chrony + `makestep 1.0 -1` -- see infra/lab-env-setup
+# cloud-init.yaml.
+#
+# Sync-wave 10 so the cert-manager controller and CRDs (in
+# cert-manager.yaml at wave 0) finish before this ClusterIssuer is
+# applied.
+#
+# Used by:
+#   * infra/image-policy-provider/ -- requests a TLS cert for the
+#     OPA Gatekeeper external-data provider service.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-pki-int
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  vault:
+    server: http://vault.vault.svc:8200
+    path: pki_int/sign/cluster-services
+    auth:
+      kubernetes:
+        mountPath: /v1/auth/kubernetes
+        role: cert-manager
+        serviceAccountRef:
+          name: cert-manager

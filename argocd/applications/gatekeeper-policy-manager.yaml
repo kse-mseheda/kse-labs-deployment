@@ -1,0 +1,28 @@
+# GPM is a packaged Helm chart vendored under infra/gatekeeper-policy-manager.
+# Its only manifests live under templates/, so the infra ApplicationSet's
+# directory walker (which we restrict to non-template YAML) returns zero
+# files and ArgoCD refuses to sync ("would wipe out all resources").
+#
+# We split it out as a stand-alone Application that omits the
+# `directory:` field; ArgoCD auto-detects Chart.yaml and goes through
+# its Helm path, bypassing the directory walker entirely.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infra-gatekeeper-policy-manager
+  namespace: argocd
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
+    targetRevision: main
+    path: infra/gatekeeper-policy-manager
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gatekeeper-policy-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

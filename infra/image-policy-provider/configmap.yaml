@@ -1,0 +1,47 @@
+# Runtime configuration for the image-policy-provider Cosign verifier.
+#
+# The provider Deployment (deployment.yaml) reads this ConfigMap via
+# `envFrom`. Edit values here (or
+# `kubectl edit configmap -n image-policy-provider image-policy-provider-config`)
+# to change which images the verifier accepts and which signer it
+# trusts -- no provider rebuild needed, just `kubectl rollout restart
+# deploy/image-policy-provider` afterwards.
+#
+# Note: this Application has ArgoCD `selfHeal: true` like the rest of
+# infra. Live `kubectl edit` works for short experiments, but ArgoCD
+# will reconcile back to the values committed here within a few minutes.
+# For persistent changes, edit this file in git.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-policy-provider-config
+  namespace: image-policy-provider
+  annotations:
+    description: "Runtime config for the Cosign verifier (ALLOWED_REGISTRIES, COSIGN_*, LOG_*)."
+data:
+  # Comma-separated repo prefixes the verifier will accept. The image
+  # itself must be pinned by digest (repo@sha256:<64hex>); the prefix
+  # is matched against the repo portion before the @.
+  ALLOWED_REGISTRIES: "ghcr.io/kse-bd8338bbe006"
+
+  # ---- Trust mode 1: key-based ----
+  # Path to a Cosign public key inside the container. Defaults to the
+  # empty key Secret mounted at /etc/cosign/cosign.pub -- which means
+  # every verification fails until a real key is loaded OR keyless
+  # mode is configured below. Set to "-" (or unset by removing the
+  # line) to use keyless mode instead.
+  COSIGN_KEY_PATH: "/etc/cosign/cosign.pub"
+
+  # ---- Trust mode 2: keyless (GitHub Actions OIDC) ----
+  # Uncomment and fill in to verify Sigstore-signed images instead of
+  # key-based ones. The verifier picks keyless mode whenever
+  # COSIGN_KEY_PATH is empty AND both of these are set.
+  # COSIGN_IDENTITY: "https://github.com/<your-org>/<your-repo>/.github/workflows/<workflow>.yml@refs/heads/main"
+  # COSIGN_OIDC_ISSUER: "https://token.actions.githubusercontent.com"
+
+  # ---- Logging ----
+  LOG_LEVEL: "INFO"
+  # When "true", the provider dumps the full ProviderRequest and
+  # ProviderResponse JSON on every admission. Cheap and useful in
+  # the classroom; turn off in production.
+  LOG_BODIES: "true"

@@ -1,0 +1,35 @@
+# TLS cert for the image-policy-provider Service.
+#
+# Issued by the in-cluster Vault PKI ClusterIssuer (infra/cert-manager/
+# clusterissuer-vault.yaml). The DNS name covers the in-cluster Service
+# FQDN that Gatekeeper's external_data() built-in resolves to.
+#
+# The Vault role 'cluster-services' allows subdomains of svc.cluster.local
+# (see infra/vault-pki/configmap-script.yaml), so this name passes role
+# validation.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: image-policy-provider-tls
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretName: image-policy-provider-tls
+  duration: 720h        # 30 days
+  renewBefore: 240h     # renew with 10 days left
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  commonName: image-policy-provider.image-policy-provider.svc
+  dnsNames:
+    - image-policy-provider
+    - image-policy-provider.image-policy-provider
+    - image-policy-provider.image-policy-provider.svc
+    - image-policy-provider.image-policy-provider.svc.cluster.local
+  issuerRef:
+    name: vault-pki-int
+    kind: ClusterIssuer
+    group: cert-manager.io

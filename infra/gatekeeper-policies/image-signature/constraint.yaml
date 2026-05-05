@@ -1,0 +1,35 @@
+# Apply the K8sImageSignature template to every Pod / Deployment /
+# StatefulSet / DaemonSet / Job / CronJob created in the `applications`
+# namespace.
+#
+# Starts in `dryrun` so a misconfigured provider (no Cosign key, network
+# blip) doesn't accidentally block the lab apps. Switch to `deny` once
+# the provider's Cosign key is loaded and at least one signed image
+# round-trips end-to-end.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sImageSignature
+metadata:
+  name: applications-must-use-signed-images
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # Enforced in the `applications` namespace -- any Pod whose image
+  # the provider can't verify (registry-allowlist miss OR cosign
+  # rejection) is refused at admission. The match.namespaces below
+  # scopes the deny to just `applications`; everything else
+  # (kube-system, vault, gatekeeper, image-policy-provider, ...)
+  # bypasses this constraint entirely.
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"]
+      - apiGroups: ["batch"]
+        kinds: ["Job", "CronJob"]
+    namespaces:
+      - applications
+  parameters:
+    provider: image-policy-provider

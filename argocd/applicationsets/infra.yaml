@@ -10,6 +10,14 @@ spec:
         revision: main
         directories:
           - path: infra/*
+          # Helm-charted infra apps. Their manifests live under
+          # templates/ (which we'd otherwise have to scan, and that
+          # breaks the directory walker). They are managed as
+          # stand-alone Applications -- see argocd/applications/.
+          - path: infra/gatekeeper
+            exclude: true
+          - path: infra/gatekeeper-policy-manager
+            exclude: true
   template:
     metadata:
       name: 'infra-{{path.basename}}'
@@ -25,7 +33,7 @@ spec:
           # Recurse through subdirectories so apps can organize their
           # YAMLs into per-topic folders (e.g. gatekeeper-policies
           # groups related files into read-only-root-fs/, etc.).
-          # Helm chart apps ignore this field.
+          # Helm-charted apps live under argocd/applications/ instead.
           recurse: true
       destination:
         server: https://kubernetes.default.svc
@@ -34,5 +42,11 @@ spec:
         automated:
           prune: true
           selfHeal: true
+        retry:
+          limit: 10
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
         syncOptions:
           - CreateNamespace=true

@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-pki-init
+  namespace: vault
+  annotations:
+    # Re-run when the script changes (the ConfigMap revision is part of the
+    # Job's pod-template hash via env). ArgoCD treats Jobs with this hook
+    # as run-on-each-sync.
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: vault-pki-init
+      containers:
+        - name: init
+          image: hashicorp/vault:1.17.2
+          command: ["/bin/sh", "/scripts/init.sh"]
+          env:
+            - name: VAULT_ADDR
+              value: http://vault.vault.svc:8200
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault-token
+                  key: token
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: vault-pki-init-script
+            defaultMode: 0755

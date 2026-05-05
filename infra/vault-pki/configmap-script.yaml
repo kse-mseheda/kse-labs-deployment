@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-pki-init-script
+  namespace: vault
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+
+    # ----------------------------------------------------------------------
+    # Idempotent: skip the whole setup if pki/ is already mounted.
+    # ----------------------------------------------------------------------
+    if vault secrets list -format=json | grep -q '"pki/"'; then
+      echo "pki/ already mounted; nothing to do."
+      exit 0
+    fi
+
+    echo ">> enable pki (root CA), 10-year max TTL"
+    vault secrets enable -path=pki pki
+    vault secrets tune -max-lease-ttl=87600h pki
+
+    echo ">> generate root CA"
+    vault write -field=certificate pki/root/generate/internal \
+      common_name="kse-labs Root CA" \
+      issuer_name="kse-root" \
+      ttl=87600h > /tmp/root.crt
+
+    echo ">> set URLs on root"
+    vault write pki/config/urls \
+      issuing_certificates="http://vault.vault.svc:8200/v1/pki/ca" \
+      crl_distribution_points="http://vault.vault.svc:8200/v1/pki/crl"
+
+    echo ">> enable pki_int (intermediate CA), 5-year max TTL"
+    vault secrets enable -path=pki_int pki
+    vault secrets tune -max-lease-ttl=43800h pki_int
+
+    echo ">> generate intermediate CSR"
+    vault write -format=json pki_int/intermediate/generate/internal \
+      common_name="kse-labs Intermediate CA" \
+      issuer_name="kse-intermediate" \
+      | sed -n 's/.*"csr": *"\(.*\)".*/\1/p' \
+      | sed 's/\\n/\n/g' > /tmp/intermediate.csr
+
+    echo ">> sign intermediate with root"
+    vault write -format=json pki/root/sign-intermediate \
+      issuer_ref="kse-root" \
+      csr=@/tmp/intermediate.csr \
+      format=pem_bundle \
+      ttl="43800h" \
+      | sed -n 's/.*"certificate": *"\(.*\)".*/\1/p' \
+      | sed 's/\\n/\n/g' > /tmp/intermediate.cert.pem
+
+    echo ">> install signed cert into intermediate"
+    vault write pki_int/intermediate/set-signed \
+      certificate=@/tmp/intermediate.cert.pem
+
+    echo ">> set URLs on intermediate"
+    vault write pki_int/config/urls \
+      issuing_certificates="http://vault.vault.svc:8200/v1/pki_int/ca" \
+      crl_distribution_points="http://vault.vault.svc:8200/v1/pki_int/crl"
+
+    echo ">> create role 'cluster-services'"
+    vault write pki_int/roles/cluster-services \
+      allowed_domains="svc,svc.cluster.local,cluster.local,gatekeeper,image-policy-provider" \
+      allow_subdomains=true \
+      allow_bare_domains=true \
+      allow_glob_domains=true \
+      allow_localhost=true \
+      enforce_hostnames=false \
+      key_type="any" \
+      max_ttl="720h"
+
+    echo ">> create policy 'pki-issuer' for cert-manager"
+    vault policy write pki-issuer - <<'POLICY'
+    path "pki_int/sign/cluster-services" { capabilities = ["create", "update"] }
+    path "pki_int/issue/cluster-services" { capabilities = ["create", "update"] }
+    POLICY
+
+    echo ">> enable Kubernetes auth"
+    vault auth list -format=json | grep -q '"kubernetes/"' \
+      || vault auth enable kubernetes
+
+    echo ">> configure Kubernetes auth"
+    vault write auth/kubernetes/config \
+      kubernetes_host="https://kubernetes.default.svc:443"
+
+    echo ">> bind cert-manager ServiceAccount to pki-issuer policy"
+    vault write auth/kubernetes/role/cert-manager \
+      bound_service_account_names="cert-manager" \
+      bound_service_account_namespaces="cert-manager" \
+      policies="pki-issuer" \
+      ttl="1h"
+
+    echo "done."

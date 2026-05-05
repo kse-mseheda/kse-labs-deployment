@@ -1,0 +1,101 @@
+# ConstraintTemplate: K8sImageSignature
+#
+# Calls our in-cluster external-data provider (image-policy-provider) for
+# every container image referenced by a Pod / Deployment / etc., and
+# denies admission if any image is unsigned, mutable-tagged, or comes
+# from a registry the provider is not configured to trust.
+#
+# The Rego policy here only owns the *call*: it pulls every container
+# image out of the request, hands them to `external_data()`, then walks
+# the response and surfaces any `errors[]` as constraint violations.
+# The actual trust decision (digest pinning, registry allowlist, Cosign
+# verification) lives in the provider service:
+#   https://github.com/kse-bd8338bbe006/image-policy-provider
+#
+# This split is the point: Gatekeeper is sandboxed Rego with no I/O, so
+# anything that needs to talk to a registry, a key store, or a Sigstore
+# transparency log has to live behind external_data().
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8simagesignature
+  annotations:
+    metadata.gatekeeper.sh/title: "Image Signature (Cosign via external_data)"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sImageSignature
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            provider:
+              type: string
+              description: >-
+                Name of the externaldata.gatekeeper.sh/Provider to call.
+                Defaults to "image-policy-provider".
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8simagesignature
+
+        # collect every container image in the request (init, regular,
+        # ephemeral) -- works for Pod and any spec.template.spec wrapper
+        # such as Deployment / StatefulSet / Job.
+        images[image] {
+          containers := concat_containers(input.review.object)
+          image := containers[_].image
+        }
+
+        concat_containers(obj) = out {
+          obj.spec.containers
+          out := array.concat(
+            array.concat(
+              obj.spec.containers,
+              object.get(obj.spec, "initContainers", []),
+            ),
+            object.get(obj.spec, "ephemeralContainers", []),
+          )
+        }
+
+        concat_containers(obj) = out {
+          obj.spec.template.spec.containers
+          out := array.concat(
+            array.concat(
+              obj.spec.template.spec.containers,
+              object.get(obj.spec.template.spec, "initContainers", []),
+            ),
+            object.get(obj.spec.template.spec, "ephemeralContainers", []),
+          )
+        }
+
+        provider_name := name {
+          name := input.parameters.provider
+          name != ""
+        } else := "image-policy-provider"
+
+        # external_data returns:
+        #   { "responses": [ [key, value], ... ],
+        #     "errors":    [ [key, error], ... ],
+        #     "system_error": "..." }
+        response := external_data({
+          "provider": provider_name,
+          "keys":     [img | images[img]],
+        })
+
+        violation[{"msg": msg}] {
+          response.system_error != ""
+          msg := sprintf(
+            "image-policy-provider system error: %v",
+            [response.system_error],
+          )
+        }
+
+        violation[{"msg": msg}] {
+          err := response.errors[_]
+          msg := sprintf(
+            "image %v rejected by image-policy-provider: %v",
+            [err[0], err[1]],
+          )
+        }

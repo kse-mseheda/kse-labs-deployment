@@ -1,0 +1,32 @@
+# Gatekeeper is a vendored Helm chart whose rendered manifests live
+# under infra/gatekeeper/templates/. The infra ApplicationSet's
+# directory walker excludes templates/, which would otherwise prune
+# every Gatekeeper resource (controller, audit, webhooks, RBAC).
+#
+# Stand-alone Application here uses ArgoCD's Helm auto-detection
+# (Chart.yaml present, no source.directory field) so the chart is
+# rendered properly. The corresponding entry in the infra
+# ApplicationSet has `exclude: true` for this path.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infra-gatekeeper
+  namespace: argocd
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
+    targetRevision: main
+    path: infra/gatekeeper
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gatekeeper
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The chart includes ServerSideApply-friendly CRDs; let ArgoCD
+      # apply them rather than treating them as managed manifests.
+      - ServerSideApply=true

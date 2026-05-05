@@ -16,3 +16,9 @@ spec:
       kind: AppProject
     - group: argoproj.io
       kind: ApplicationSet
+    # Stand-alone Applications for charts/sources that don't fit the
+    # infra ApplicationSet's directory generator (e.g. pure Helm
+    # charts whose only YAML lives under templates/). See
+    # argocd/applications/.
+    - group: argoproj.io
+      kind: Application

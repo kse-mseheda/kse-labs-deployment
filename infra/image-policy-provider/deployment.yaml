@@ -1,0 +1,189 @@
+# OPA Gatekeeper external-data provider for image signature checks.
+# Source: https://github.com/kse-bd8338bbe006/image-policy-provider
+#
+# Cosign trust material (a public key) is mounted as a Secret. For lab
+# convenience the key is empty by default -- generate a key pair with
+# `cosign generate-key-pair` and replace the data.
+#
+# Sync-wave 25 so the issued TLS Secret (Certificate at wave 20) exists
+# before the Pod starts -- otherwise the volume mount would block
+# ContainerCreating until cert-manager catches up.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: image-policy-provider-cosign-key
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+type: Opaque
+stringData:
+  # Replace with the public key used to sign your images.
+  # Lab default: empty -> verify_image() will fail with a clear message,
+  # which is what we want until students run `cosign generate-key-pair`.
+  cosign.pub: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-policy-provider
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+  labels:
+    app.kubernetes.io/name: image-policy-provider
+    app.kubernetes.io/part-of: gatekeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: image-policy-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: image-policy-provider
+    spec:
+      automountServiceAccountToken: false
+      # The provider image is a private GHCR package. The Secret is
+      # populated by the ExternalSecret in external-secret.yaml from
+      # secret/github/ghcr-pull-secret in Vault.
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: provider
+          image: ghcr.io/kse-bd8338bbe006/image-policy-provider:main
+          imagePullPolicy: Always
+          ports:
+            - name: https
+              containerPort: 8443
+          # Runtime configuration -- allowed registries, Cosign trust
+          # material, log level, body dumps -- lives in configmap.yaml
+          # alongside this manifest. Editing it (or `kubectl edit
+          # configmap -n image-policy-provider image-policy-provider-config`)
+          # and rolling out the Deployment is the supported way to
+          # tweak provider behavior; the Deployment itself rarely
+          # changes.
+          envFrom:
+            - configMapRef:
+                name: image-policy-provider-config
+                # optional: don't crash if the config is briefly absent
+                # during bootstrap; the verifier will simply log
+                # "trust mode unset" until the ConfigMap arrives.
+                optional: true
+          env:
+            # cosign caches Rekor public keys under $HOME/.sigstore.
+            # readOnlyRootFilesystem=true makes the default home
+            # (/home/provider) immutable, so point HOME at a tmpfs
+            # mount we own. Same for $TMPDIR for any temp files.
+            - name: HOME
+              value: /tmp
+            - name: TMPDIR
+              value: /tmp
+            # Make cosign authenticate to private registries (GHCR
+            # for our own images) using the same Vault-backed PAT
+            # that the kubelet uses for image pulls.
+            - name: DOCKER_CONFIG
+              value: /etc/docker
+            # When this file exists, the provider's start.py turns on
+            # mTLS: only TLS clients whose cert chains to Gatekeeper's
+            # webhook CA can hit /validate. The Secret it points at is
+            # populated by the cabundle Job (see cabundle-job.yaml,
+            # mirrors gatekeeper/gatekeeper-webhook-server-cert).
+            # Optional -- the entrypoint falls back to one-way TLS if
+            # the file is missing, so the lab survives a cold cluster.
+            - name: GATEKEEPER_CA_CERT_FILE
+              value: /etc/gatekeeper-ca/ca.crt
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true
+            - name: cosign-key
+              mountPath: /etc/cosign
+              readOnly: true
+            - name: cache
+              mountPath: /tmp
+            - name: docker-config
+              mountPath: /etc/docker
+              readOnly: true
+            - name: gatekeeper-ca
+              mountPath: /etc/gatekeeper-ca
+              readOnly: true
+          # /readyz returns 503 until cosign is on PATH AND a trust
+          # mode is configured; protects us from sending traffic to a
+          # half-configured pod. /healthz stays as the liveness probe
+          # because the process is up regardless of trust material.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: tls
+          secret:
+            secretName: image-policy-provider-tls
+        - name: cosign-key
+          secret:
+            secretName: image-policy-provider-cosign-key
+        - name: cache
+          emptyDir:
+            sizeLimit: 32Mi
+        # The kubernetes.io/dockerconfigjson Secret stores its
+        # creds in a key called `.dockerconfigjson`. cosign reads
+        # `$DOCKER_CONFIG/config.json`. Project the secret key onto
+        # that filename so cosign and the kubelet share one source
+        # of truth (the Vault-backed PAT).
+        # Gatekeeper's CA, mirrored into this namespace by the
+        # cabundle Job (see cabundle-job.yaml). `optional: true`
+        # so the pod still boots if the Secret hasn't been
+        # populated yet -- the entrypoint falls back to one-way
+        # TLS in that case.
+        - name: gatekeeper-ca
+          secret:
+            secretName: gatekeeper-ca
+            optional: true
+        - name: docker-config
+          secret:
+            secretName: ghcr-pull-secret
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-policy-provider
+  namespace: image-policy-provider
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+spec:
+  selector:
+    app.kubernetes.io/name: image-policy-provider
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
