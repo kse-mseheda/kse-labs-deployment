@@ -25,7 +25,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: session-cookie-demo
-          image: ghcr.io/kse-bd8338bbe006/session-cookie-demo:2ff0915deb273dac6fcef8f5a53f9a8cdd4d3997
+          image: ghcr.io/kse-bd8338bbe006/session-cookie-demo:8ae6b87052153aa5e4bb1088fdc5dcd68d2a265f
           ports:
             - name: http
               containerPort: 8080
