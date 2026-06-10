@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Infrastructure components
   sourceRepos:
-    - https://github.com/kse-bd8338bbe006/kse-labs-deployment.git
+    - https://github.com/kse-mseheda/kse-labs-deployment.git
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
