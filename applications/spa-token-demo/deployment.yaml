@@ -23,41 +23,6 @@ spec:
         runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
-      initContainers:
-        # Build a JVM truststore that trusts the kse-labs internal PKI so the app
-        # can fetch the Keycloak JWKS over HTTPS (cert issued by the kse-labs CA,
-        # which is not in the default JDK cacerts).
-        - name: import-ca
-          image: eclipse-temurin:21-jdk
-          command:
-            - sh
-            - -c
-            - |
-              set -e
-              cp /opt/java/openjdk/lib/security/cacerts /truststore/cacerts
-              keytool -importcert -noprompt -alias kse-labs-root \
-                -file /ca/root.crt -keystore /truststore/cacerts -storepass changeit
-              keytool -importcert -noprompt -alias kse-labs-intermediate \
-                -file /ca/intermediate.crt -keystore /truststore/cacerts -storepass changeit
-              echo "Imported kse-labs CAs:"
-              keytool -list -keystore /truststore/cacerts -storepass changeit | grep -i kse-labs
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: truststore
-              mountPath: /truststore
-            - name: ca-certs
-              mountPath: /ca
-              readOnly: true
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 250m
-              memory: 256Mi
       containers:
         - name: spa-token-demo
           image: ghcr.io/kse-mseheda/spa-token-demo:729a9a2b401a7d1cd2ee97e6c9848c6df3c6a98a
@@ -84,11 +49,11 @@ spec:
                   key: password
             - name: KEYCLOAK_ISSUER_URI
               value: https://keycloak.192.168.50.10.nip.io/realms/api-security
-            - name: JAVA_TOOL_OPTIONS
-              value: >-
-                -Djavax.net.ssl.trustStore=/truststore/cacerts
-                -Djavax.net.ssl.trustStorePassword=changeit
-                -Djavax.net.ssl.trustStoreType=PKCS12
+            # The app validates the Keycloak JWKS TLS cert against app.internal-ca,
+            # NOT the JVM truststore. The CA baked into the image is stale and no
+            # longer matches the live Vault PKI, so point it at the current CA chain.
+            - name: SPRING_APPLICATION_JSON
+              value: '{"app":{"internal-ca":"file:/etc/kse-pki/internal-ca.pem"}}'
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -97,8 +62,8 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            - name: truststore
-              mountPath: /truststore
+            - name: kse-pki
+              mountPath: /etc/kse-pki
               readOnly: true
           resources:
             requests:
@@ -124,8 +89,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 64Mi
-        - name: truststore
-          emptyDir: {}
-        - name: ca-certs
+        - name: kse-pki
           configMap:
             name: kse-labs-ca

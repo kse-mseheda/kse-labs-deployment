@@ -6,10 +6,30 @@ metadata:
   labels:
     app.kubernetes.io/name: spa-token-demo
     owner: platform-team
-# kse-labs internal PKI (Vault). Trusted by the app so it can fetch the Keycloak
-# JWKS over HTTPS. CA certificates are public material — safe to store in git.
+# Current kse-labs internal PKI (Vault) CA chain (root + intermediate).
+# The app trusts this for the Keycloak JWKS TLS connection via app.internal-ca.
+# The CA baked into the image is stale and no longer matches the live PKI.
 data:
-  intermediate.crt: |-
+  internal-ca.pem: |-
+    -----BEGIN CERTIFICATE-----
+    MIIDJzCCAg+gAwIBAgIUWDMiP0D9VVs+ZuVj8TAksuKLijswDQYJKoZIhvcNAQEL
+    BQAwGzEZMBcGA1UEAxMQa3NlLWxhYnMgUm9vdCBDQTAeFw0yNjA2MTAxNjQ3MzBa
+    Fw0zNjA2MDcxNjQ4MDBaMBsxGTAXBgNVBAMTEGtzZS1sYWJzIFJvb3QgQ0EwggEi
+    MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDjcTAZ+E0m16y8Udkk+Ehkx6ip
+    sr629zZnwHx7VLMCjDSUBJedhogbn2LK7kj2iSFMW8QF9E2xemm1IdTWoZSDhFvv
+    OH4LooLMAxCq9B6vrs0gMDdbG+9PMtbMQmgc2ve/Rg4CtC4Gt1tr8k1Rui2eKnnN
+    0C+rwoluzqMc5Zit9LiZ7QhsvO9DSMDw4ixOGLXvfftMyHpkNS8BVLEcWdRJkk98
+    HIg5TbSYvcSOLLon9F84Vb4HDXp4iiBKcOOVrnVUO1sLqqJjaXVIdBtof7oVHC/W
+    gYai5QH62GXc26xUUgocWse6dxQnZ/I4Q2Waas4h2//4FV5xkA4yy1jkm4HdAgMB
+    AAGjYzBhMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQW
+    BBTPRxNBsRIPK4ovYQCYRKXuc9Q/qzAfBgNVHSMEGDAWgBTPRxNBsRIPK4ovYQCY
+    RKXuc9Q/qzANBgkqhkiG9w0BAQsFAAOCAQEA1nM+bjv34bAS0TnlDVbXKFwtYlx/
+    cPTMJeOSIQh/XPFu2a/aAR4LfZCGDYlz5Nm9nX8VeRV2vJM233SceirCv9djGYPe
+    uzP4REifVCBdej9bQpqo9XPF70eOLF9ichTVWUA+KOhgAZpVjZ+JFXwA5LmfYTNN
+    ZeDjywsTBZKHrZe5JFTc1Y4EzyIQ1apgi7apOE6kjqHUN4ZiGJQYM4GzKD92p1kn
+    ro3wojGKiLStwsM+Rt4PqB6y2gAMHSYvIMJvTJCXXnyQFOutdJx0ALESLXt8ct/F
+    ggM5WkDMoj8S9LCRLDaocRrWv455th5aMbJG3ZKkFzY1WVU7W94CBwzZ7w==
+    -----END CERTIFICATE-----
     -----BEGIN CERTIFICATE-----
     MIIDrTCCApWgAwIBAgIUXwrQnOpIsgNjkrhFcFhebWsu6A8wDQYJKoZIhvcNAQEL
     BQAwGzEZMBcGA1UEAxMQa3NlLWxhYnMgUm9vdCBDQTAeFw0yNjA2MTAxNjQ3MzJa
@@ -31,25 +51,5 @@ data:
     yPzRRRGlxjQxaWT1Lp6z+U75s/6mam3TZMVYVQTn/jLueuB0PAw4KBnR5vI9geWY
     dYH96ij3Y79wtj6VYDCQFfOPTrZxPj1SDsRAIJlXkW6Fh1IeP5BdgV8ixDc/01aC
     LfE15YPpu6DI6s8BdRF0M5wGtsw+0lGec78m8r5eXiW+
-    -----END CERTIFICATE-----
-  root.crt: |
-    -----BEGIN CERTIFICATE-----
-    MIIDJzCCAg+gAwIBAgIUWDMiP0D9VVs+ZuVj8TAksuKLijswDQYJKoZIhvcNAQEL
-    BQAwGzEZMBcGA1UEAxMQa3NlLWxhYnMgUm9vdCBDQTAeFw0yNjA2MTAxNjQ3MzBa
-    Fw0zNjA2MDcxNjQ4MDBaMBsxGTAXBgNVBAMTEGtzZS1sYWJzIFJvb3QgQ0EwggEi
-    MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDjcTAZ+E0m16y8Udkk+Ehkx6ip
-    sr629zZnwHx7VLMCjDSUBJedhogbn2LK7kj2iSFMW8QF9E2xemm1IdTWoZSDhFvv
-    OH4LooLMAxCq9B6vrs0gMDdbG+9PMtbMQmgc2ve/Rg4CtC4Gt1tr8k1Rui2eKnnN
-    0C+rwoluzqMc5Zit9LiZ7QhsvO9DSMDw4ixOGLXvfftMyHpkNS8BVLEcWdRJkk98
-    HIg5TbSYvcSOLLon9F84Vb4HDXp4iiBKcOOVrnVUO1sLqqJjaXVIdBtof7oVHC/W
-    gYai5QH62GXc26xUUgocWse6dxQnZ/I4Q2Waas4h2//4FV5xkA4yy1jkm4HdAgMB
-    AAGjYzBhMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQW
-    BBTPRxNBsRIPK4ovYQCYRKXuc9Q/qzAfBgNVHSMEGDAWgBTPRxNBsRIPK4ovYQCY
-    RKXuc9Q/qzANBgkqhkiG9w0BAQsFAAOCAQEA1nM+bjv34bAS0TnlDVbXKFwtYlx/
-    cPTMJeOSIQh/XPFu2a/aAR4LfZCGDYlz5Nm9nX8VeRV2vJM233SceirCv9djGYPe
-    uzP4REifVCBdej9bQpqo9XPF70eOLF9ichTVWUA+KOhgAZpVjZ+JFXwA5LmfYTNN
-    ZeDjywsTBZKHrZe5JFTc1Y4EzyIQ1apgi7apOE6kjqHUN4ZiGJQYM4GzKD92p1kn
-    ro3wojGKiLStwsM+Rt4PqB6y2gAMHSYvIMJvTJCXXnyQFOutdJx0ALESLXt8ct/F
-    ggM5WkDMoj8S9LCRLDaocRrWv455th5aMbJG3ZKkFzY1WVU7W94CBwzZ7w==
     -----END CERTIFICATE-----
 kind: ConfigMap
