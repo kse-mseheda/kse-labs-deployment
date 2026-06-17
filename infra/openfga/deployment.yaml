@@ -51,7 +51,12 @@ spec:
           image: openfga/openfga:v1.17.1
           args:
             - run
-            - --playground-enabled=false
+            # Built-in Playground UI on :3000 (/playground). It is DEPRECATED
+            # and binds to 127.0.0.1 only, so it cannot be exposed via Service
+            # or Ingress - reach it with:
+            #   kubectl -n openfga port-forward deploy/openfga 3000:3000 8080:8080
+            # then open http://localhost:3000/playground
+            - --playground-enabled=true
           env:
             - name: OPENFGA_DATASTORE_ENGINE
               value: postgres
@@ -73,6 +78,9 @@ spec:
               protocol: TCP
             - name: grpc
               containerPort: 8081
+              protocol: TCP
+            - name: playground
+              containerPort: 3000
               protocol: TCP
           securityContext:
             allowPrivilegeEscalation: false
