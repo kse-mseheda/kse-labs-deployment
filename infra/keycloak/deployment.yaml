@@ -36,6 +36,8 @@ spec:
             - --proxy-headers=xforwarded
             - --http-enabled=true
             - --health-enabled=true
+            - --spi-x509cert-lookup-provider=nginx
+            - --spi-x509cert-lookup-nginx-ssl-client-cert=ssl-client-cert
           env:
             - name: DB_HOST
               value: "192.168.50.10"

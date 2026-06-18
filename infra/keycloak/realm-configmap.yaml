@@ -11,6 +11,26 @@ data:
       "loginWithEmailAllowed": true,
       "resetPasswordAllowed": true,
       "bruteForceProtected": true,
+      "roles": {
+        "realm": [
+          {
+            "name": "document-viewer",
+            "description": "May view documents (Lecture 6 authz demo)"
+          },
+          {
+            "name": "document-editor",
+            "description": "May view and edit documents",
+            "composite": true,
+            "composites": { "realm": ["document-viewer"] }
+          },
+          {
+            "name": "document-admin",
+            "description": "May view, edit and delete documents",
+            "composite": true,
+            "composites": { "realm": ["document-editor"] }
+          }
+        ]
+      },
       "clients": [
         {
           "clientId": "spa-token-demo",
@@ -28,6 +48,107 @@ data:
             "http://localhost:3000"
           ],
           "protocol": "openid-connect"
+        },
+        {
+          "clientId": "documents-api",
+          "name": "Documents API (Lecture 6 resource server)",
+          "enabled": true,
+          "publicClient": false,
+          "bearerOnly": false,
+          "standardFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "serviceAccountsEnabled": true,
+          "authorizationServicesEnabled": true,
+          "secret": "documents-api-secret-lab-2026",
+          "protocol": "openid-connect",
+          "authorizationSettings": {
+            "allowRemoteResourceManagement": true,
+            "policyEnforcementMode": "ENFORCING",
+            "decisionStrategy": "UNANIMOUS",
+            "resources": [
+              {
+                "name": "Document",
+                "displayName": "Document",
+                "type": "urn:authz-demo:resources:document",
+                "ownerManagedAccess": false,
+                "scopes": [
+                  { "name": "document:view" },
+                  { "name": "document:edit" },
+                  { "name": "document:delete" }
+                ]
+              }
+            ],
+            "scopes": [
+              { "name": "document:view" },
+              { "name": "document:edit" },
+              { "name": "document:delete" }
+            ],
+            "policies": [
+              {
+                "name": "viewer-role-policy",
+                "description": "Caller has the document-viewer role",
+                "type": "role",
+                "logic": "POSITIVE",
+                "decisionStrategy": "UNANIMOUS",
+                "config": {
+                  "roles": "[{\"id\":\"document-viewer\",\"required\":false}]"
+                }
+              },
+              {
+                "name": "editor-role-policy",
+                "description": "Caller has the document-editor role",
+                "type": "role",
+                "logic": "POSITIVE",
+                "decisionStrategy": "UNANIMOUS",
+                "config": {
+                  "roles": "[{\"id\":\"document-editor\",\"required\":false}]"
+                }
+              },
+              {
+                "name": "admin-role-policy",
+                "description": "Caller has the document-admin role",
+                "type": "role",
+                "logic": "POSITIVE",
+                "decisionStrategy": "UNANIMOUS",
+                "config": {
+                  "roles": "[{\"id\":\"document-admin\",\"required\":false}]"
+                }
+              },
+              {
+                "name": "View Document Permission",
+                "type": "scope",
+                "logic": "POSITIVE",
+                "decisionStrategy": "UNANIMOUS",
+                "config": {
+                  "resources": "[\"Document\"]",
+                  "scopes": "[\"document:view\"]",
+                  "applyPolicies": "[\"viewer-role-policy\"]"
+                }
+              },
+              {
+                "name": "Edit Document Permission",
+                "type": "scope",
+                "logic": "POSITIVE",
+                "decisionStrategy": "UNANIMOUS",
+                "config": {
+                  "resources": "[\"Document\"]",
+                  "scopes": "[\"document:edit\"]",
+                  "applyPolicies": "[\"editor-role-policy\"]"
+                }
+              },
+              {
+                "name": "Delete Document Permission",
+                "type": "scope",
+                "logic": "POSITIVE",
+                "decisionStrategy": "UNANIMOUS",
+                "config": {
+                  "resources": "[\"Document\"]",
+                  "scopes": "[\"document:delete\"]",
+                  "applyPolicies": "[\"admin-role-policy\"]"
+                }
+              }
+            ]
+          }
         }
       ],
       "users": [
@@ -38,12 +159,30 @@ data:
           "firstName": "Lab",
           "lastName": "Student",
           "credentials": [
-            {
-              "type": "password",
-              "value": "student",
-              "temporary": false
-            }
+            { "type": "password", "value": "student", "temporary": false }
           ]
+        },
+        {
+          "username": "alice",
+          "enabled": true,
+          "email": "alice@example.com",
+          "firstName": "Alice",
+          "lastName": "Admin",
+          "credentials": [
+            { "type": "password", "value": "alice", "temporary": false }
+          ],
+          "realmRoles": ["document-admin"]
+        },
+        {
+          "username": "bob",
+          "enabled": true,
+          "email": "bob@example.com",
+          "firstName": "Bob",
+          "lastName": "Viewer",
+          "credentials": [
+            { "type": "password", "value": "bob", "temporary": false }
+          ],
+          "realmRoles": ["document-viewer"]
         }
       ]
     }

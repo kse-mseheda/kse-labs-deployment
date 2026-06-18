@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authz-demo
+  namespace: applications
+  labels:
+    app.kubernetes.io/name: authz-demo
+    owner: platform-team
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: authz-demo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: authz-demo
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: authz-demo
+          # CI (authz-demo repo) replaces this tag with the built commit sha.
+          image: ghcr.io/kse-bd8338bbe006/authz-demo:470943e115e7feab24010452fbb0c3b11bfb927c
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              value: "192.168.50.10"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: authz_demo
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: authz-demo-db
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: authz-demo-db
+                  key: password
+            - name: KEYCLOAK_ISSUER_URI
+              value: https://keycloak.192.168.50.10.nip.io/realms/api-security
+            - name: KEYCLOAK_RESOURCE_SERVER
+              value: documents-api
+            - name: OPENFGA_API_URL
+              value: http://openfga.openfga.svc.cluster.local:8080
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
