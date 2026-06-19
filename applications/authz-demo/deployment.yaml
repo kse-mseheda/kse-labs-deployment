@@ -54,6 +54,11 @@ spec:
               value: documents-api
             - name: OPENFGA_API_URL
               value: http://openfga.openfga.svc.cluster.local:8080
+            # The app validates the Keycloak JWKS TLS cert against app.internal-ca,
+            # NOT the JVM truststore. The CA baked into the image is stale and no
+            # longer matches the live Vault PKI, so point it at the current CA chain.
+            - name: SPRING_APPLICATION_JSON
+              value: '{"app":{"internal-ca":"file:/etc/kse-pki/internal-ca.pem"}}'
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -62,6 +67,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: kse-pki
+              mountPath: /etc/kse-pki
+              readOnly: true
           resources:
             requests:
               cpu: 200m
@@ -86,3 +94,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 64Mi
+        - name: kse-pki
+          configMap:
+            name: kse-labs-ca
