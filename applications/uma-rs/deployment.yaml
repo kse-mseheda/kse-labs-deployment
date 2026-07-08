@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uma-rs
+  namespace: applications
+  labels:
+    app.kubernetes.io/name: uma-rs
+    owner: platform-team
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: uma-rs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: uma-rs
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: uma-rs
+          # CI (uma-rs repo) builds this tag; bump it to redeploy a new build.
+          image: ghcr.io/kse-bd8338bbe006/uma-rs:75ca309276f48d371932f7bc5a205c4f93894f81
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: KEYCLOAK_ISSUER_URI
+              value: https://keycloak.192.168.50.10.nip.io/realms/api-security
+            - name: RS_CLIENT_ID
+              value: uma-photo-rs
+            # Lab secret (well-known, like documents-api-secret-lab-2026 in the
+            # realm import); not a real credential.
+            - name: RS_CLIENT_SECRET
+              value: uma-photo-rs-secret-lab-2026
+            - name: RESOURCE_NAME
+              value: Photo Album
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
