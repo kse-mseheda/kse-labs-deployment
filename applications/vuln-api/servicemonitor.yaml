@@ -1,0 +1,19 @@
+# Tells the lab kube-prometheus-stack to scrape vuln-api's /metrics.
+# The `release: kube-prometheus-stack` label is what the Prometheus CR's
+# serviceMonitorSelector matches - without it, Prometheus ignores this monitor.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vuln-api
+  namespace: applications
+  labels:
+    app.kubernetes.io/name: vuln-api
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vuln-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
