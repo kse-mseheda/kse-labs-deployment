@@ -35,7 +35,7 @@ spec:
             # false = vulnerable (default). Students flip this to "true" to apply
             # the fixes (ownership check + allowlist/schema + signature verify).
             - name: SECURE_MODE
-              value: "false"
+              value: "true"
             - name: KEYCLOAK_ISSUER_URI
               value: https://keycloak.192.168.50.10.nip.io/realms/api-security
           securityContext:
