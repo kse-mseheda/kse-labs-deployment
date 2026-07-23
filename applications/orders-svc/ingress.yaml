@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orders-svc
+  namespace: applications
+  annotations:
+    cert-manager.io/cluster-issuer: vault-pki-int
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - orders-svc.192.168.50.10.nip.io
+      secretName: orders-svc-tls
+  rules:
+    - host: orders-svc.192.168.50.10.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: orders-svc
+                port:
+                  number: 80
