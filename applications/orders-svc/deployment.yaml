@@ -26,7 +26,7 @@ spec:
       containers:
         - name: orders-svc
           # CI (oauth-multiservice repo) bumps this tag; :latest until the first build.
-          image: ghcr.io/kse-bd8338bbe006/orders-svc:9b55cb6ca403bc5a150d30572fb92cdfe23682ba
+          image: ghcr.io/kse-mseheda/orders-svc:9b55cb6ca403bc5a150d30572fb92cdfe23682ba
           ports:
             - name: http
               containerPort: 8000

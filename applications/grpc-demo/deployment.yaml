@@ -25,7 +25,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: grpc-demo
-          image: ghcr.io/kse-bd8338bbe006/grpc-demo:98be776040c92a9070460f7797dec79c620232a2
+          image: ghcr.io/kse-mseheda/grpc-demo:98be776040c92a9070460f7797dec79c620232a2
           ports:
             - name: http
               containerPort: 8080

@@ -26,7 +26,7 @@ spec:
       containers:
         - name: dpop-rs
           # CI (dpop-rs repo) builds this tag; bump it to redeploy a new build.
-          image: ghcr.io/kse-bd8338bbe006/dpop-rs:0e6d94259b0f61cb947a6d17c21058b0182d2445
+          image: ghcr.io/kse-mseheda/dpop-rs:0e6d94259b0f61cb947a6d17c21058b0182d2445
           ports:
             - name: http
               containerPort: 8000

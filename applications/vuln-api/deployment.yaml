@@ -26,7 +26,7 @@ spec:
       containers:
         - name: vuln-api
           # CI (vuln-api repo) builds this tag; bump it to redeploy a new build.
-          image: ghcr.io/kse-bd8338bbe006/vuln-api:9cdffc1348a82a2e163ace9d7ed87a0ffaf642e5
+          image: ghcr.io/kse-mseheda/vuln-api:9cdffc1348a82a2e163ace9d7ed87a0ffaf642e5
           ports:
             - name: http
               containerPort: 8000
