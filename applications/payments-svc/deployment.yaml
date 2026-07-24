@@ -42,7 +42,7 @@ spec:
               value: "https://openfga.192.168.50.10.nip.io"
             # Set after running setup/openfga_apply_model.py (same store id as orders-svc)
             - name: OPENFGA_STORE_ID
-              value: ""
+              value: "01KY9YQADH2JPZ780HBVAAJBS2"
             - name: VERIFY_TLS
               value: "false"
           securityContext:
